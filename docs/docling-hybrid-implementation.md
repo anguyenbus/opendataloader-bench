@@ -346,7 +346,7 @@ export DOCLING_HYBRID_TIMEOUT="120"
 | Scientific papers | ✅ Use hybrid | Complex tables benefit from VLM |
 | Financial statements | ✅ Use hybrid | Accuracy critical |
 | Simple articles | ❌ Use standard | Cost not justified |
-| High-volume batch | ❌ Use standard | Speed更重要 |
+| High-volume batch | ❌ Use standard | Speed |
 | API rate limits | ❌ Use standard | Hybrid may throttle |
 
 ### 4.3 Cost Analysis
