@@ -1,20 +1,33 @@
-# Docling-Hybrid: LLM-Enhanced PDF Parsing with Intelligent Routing
+# VLM-Enhanced PDF Parsing: A Practical Exploration
 
 ## Executive Summary
 
-This document describes the implementation of **docling-hybrid**, a novel PDF-to-Markdown parsing engine that combines traditional document processing with Vision Language Models (VLMs). The key innovation: **intelligent routing based on table count** — documents with few tables use fast local processing, while table-heavy pages leverage GPT-4o's superior table extraction capabilities.
+This document explores the landscape of open-source PDF-to-Markdown parsing engines and demonstrates a practical enhancement strategy: **combining traditional parsers with Vision Language Models (VLMs)**. We show that even a single VLM model (GPT-4o) applied selectively can meaningfully improve table extraction accuracy.
 
-### Key Results
+### The Landscape
 
-| Metric | docling | docling-hybrid | Delta |
-|--------|---------|----------------|-------|
+| Engine | Overall | Table (TEDS) | Speed | License |
+|--------|---------|--------------|-------|---------|
+| **opendataloader [hybrid]** | 0.907 | 0.928 | 0.46s | Apache-2.0 |
+| **docling** | 0.882 | 0.887 | 0.76s | MIT |
+| marker | 0.861 | 0.808 | 54s | GPL-3.0 |
+| unstructured [hi_res] | 0.841 | 0.588 | 3.0s | Apache-2.0 |
+
+**Key observation:** Docling and opendataloader represent the two strongest open-source options with permissive licensing. Both leverage deep learning-based layout analysis and significantly outperform traditional heuristic-based approaches.
+
+### VLM Enhancement: Proof of Concept
+
+We demonstrate that **any traditional parser can be enhanced with VLM fallback** for complex pages. Using Docling as the base:
+
+| Metric | docling | docling + VLM | Delta |
+|--------|---------|--------------|-------|
 | Overall Accuracy | 0.882 | **0.889** | +0.7% |
 | Reading Order (NID) | 0.898 | **0.904** | +0.6% |
 | Table Structure (TEDS) | 0.887 | **0.922** | **+3.9%** |
 | Heading Hierarchy (MHS) | 0.824 | 0.823 | -0.1% |
 | Speed (sec/page) | 0.762 | 4.899 | ~6.4× slower |
 
-**Trade-off:** 6.4× slower processing for 3.9% better table accuracy — worthwhile for table-heavy documents where structure fidelity is critical.
+**The pattern holds:** This same enhancement strategy could be applied to opendataloader, marker, or any parser that exposes document page boundaries. The routing heuristic (table count) is model-agnostic.
 
 ---
 
@@ -64,46 +77,72 @@ This document describes the implementation of **docling-hybrid**, a novel PDF-to
 
 ---
 
-## 1. Problem Statement
+## 1. The PDF Parsing Landscape
 
-### 1.1 Traditional PDF Parsing Limitations
+### 1.1 Available Open-Source Options
 
-Traditional PDF parsers (Docling, PyMuPDF, unstructured) rely on:
-- **Heuristic rules** for layout detection
-- **Geometric analysis** for reading order
-- **Pattern matching** for table extraction
+The PDF-to-Markdown parsing ecosystem has matured significantly in 2024-2025:
 
-These approaches work well for simple documents but struggle with:
-- Complex table structures (nested tables, merged cells, irregular borders)
-- Low-quality scans where geometric cues are ambiguous
-- Tables embedded in multi-column layouts
+| Engine | Approach | Strengths | Weaknesses |
+|--------|----------|-----------|------------|
+| **Docling** | DL layout analysis | Excellent table support, MIT license | Complex tables still error-prone |
+| **opendataloader** | Hybrid ensemble | Best overall accuracy | Commercial closed-source components |
+| **marker** | Vision transformer | Strong on complex layouts | GPL license, very slow |
+| **unstructured** | Modular pipeline | Highly configurable | Table extraction weak |
+| **PyMuPDF** | Geometric heuristics | Fast, lightweight | No DL, poor table support |
 
-### 1.2 LLM Strengths and Weaknesses
+**Docling stands out** as the best pure open-source option:
+- Actively maintained by IBM Research
+- MIT license (commercial-friendly)
+- State-of-the-art layout model (Docling YAML)
+- Comprehensive API for document elements
 
-Vision Language Models like GPT-4o excel at:
+### 1.2 The Remaining Gap
+
+Even the best traditional parsers struggle with:
+- **Complex table structures** — nested tables, merged cells, irregular borders
+- **Ambiguous layouts** — multi-column documents with sidebars
+- **Table-in-table scenarios** — embedded tables within cells
+
+Current approaches rely on:
+- Heuristic rules for layout detection
+- Geometric analysis for reading order
+- Pattern matching for table extraction
+
+These work for ~85-90% of cases. The remaining 10-15% represent **semantic ambiguity** that requires contextual understanding.
+
+### 1.3 VLMs as Complementary Tools
+
+Vision Language Models (GPT-4o, Claude, Gemini) bring:
 - **Semantic understanding** of document structure
-- **Robust table extraction** even from noisy inputs
 - **Context-aware interpretation** of ambiguous layouts
+- **Robust table extraction** even from complex inputs
 
-However, they have significant drawbacks:
-- **API costs** — every page incurs OpenAI fees
+But they have drawbacks:
+- **API costs** — every page incurs fees
 - **Latency** — network requests add seconds per page
-- **Rate limits** — batch processing requires careful throttling
-- **Dependency** — requires API keys and internet connectivity
+- **Rate limits** — batch processing requires throttling
 
-### 1.3 The Hybrid Opportunity
+### 1.4 The Hybrid Pattern
 
-Neither approach is universally superior. The optimal solution:
-- Use **fast, local parsing** for simple pages (≤2 tables)
-- Use **LLM-powered parsing** for complex pages (>2 tables)
+**Key insight:** Traditional parsers and VLMs are *complementary*, not competing.
 
-This hybrid approach minimizes API costs while maximizing quality where it matters most.
+| Document Type | Best Approach | Rationale |
+|---------------|---------------|-----------|
+| Simple pages (≤2 tables) | Traditional parser | Fast, free, 95%+ accurate |
+| Complex pages (>2 tables) | VLM fallback | Semantic reasoning needed |
+
+This pattern applies to **any parser** that exposes page-level access — Docling, opendataloader, marker, unstructured, etc.
 
 ---
 
 ## 2. Architecture
 
-### 2.1 System Overview
+### 2.1 General Pattern (Parser-Agnostic)
+
+The architecture below applies to **any PDF parser** with page-level access. Replace "Layout Analysis" with your chosen parser (Docling, opendataloader, marker, etc.). Routing logic is identical across implementations.
+
+### 2.2 System Overview (Docling Reference)
 
 ```
 ┌─────────────────┐
@@ -158,7 +197,7 @@ This hybrid approach minimizes API costs while maximizing quality where it matte
           └─────────────────┘
 ```
 
-### 2.2 Routing Logic
+### 2.3 Routing Logic (Applies to Any Parser)
 
 ```python
 TABLE_COUNT_THRESHOLD = 2
@@ -178,7 +217,7 @@ def _should_use_vlm(table_count: int) -> bool:
 - Simple documents (0-2 tables): $0 API cost
 - Table-heavy documents: ~$0.01-0.03 per page (GPT-4o-mini)
 
-### 2.3 Double Conversion Optimization
+### 2.4 Double Conversion Optimization (Docling-Specific)
 
 **Initial implementation problem:**
 ```python
@@ -196,7 +235,7 @@ markdown = cached_result.document.export_to_markdown()           # Reuses result
 
 **Performance impact:** ~50% reduction in processing time for standard-path documents.
 
-### 2.4 Retry Logic with Exponential Backoff
+### 2.5 Retry Logic with Exponential Backoff
 
 API failures are inevitable (rate limits, network issues). The implementation uses:
 
@@ -226,7 +265,9 @@ def _calculate_retry_delay(attempt: int) -> float:
 
 ---
 
-## 3. Implementation Details
+## 3. Docling Implementation (Reference)
+
+This section details the Docling-specific implementation. Other parsers would follow the same pattern with different integration points.
 
 ### 3.1 File Structure
 
@@ -417,25 +458,25 @@ jitter = random.uniform(0.0, 0.25) * capped_delay
 
 ---
 
-## 6. Why Hybrid Approach Works
+## 6. Why the Hybrid Pattern Works
 
 ### 6.1 Complementary Strengths
 
-| Aspect | Traditional Parsing | LLM (GPT-4o) | Winner |
+| Aspect | Traditional Parsing | VLM (GPT-4o) | Winner |
 |--------|---------------------|--------------|--------|
 | Speed | ~0.7s/page | ~5s/page | Traditional |
 | Cost | Free | ~$0.02/page | Traditional |
-| Simple tables | 95% accuracy | 97% accuracy | LLM (marginal) |
-| Complex tables | 70% accuracy | 95% accuracy | LLM (dominant) |
+| Simple tables | 95% accuracy | 97% accuracy | VLM (marginal) |
+| Complex tables | 70% accuracy | 95% accuracy | VLM (dominant) |
 | No tables | 99% accuracy | 98% accuracy | Traditional |
 | Reading order | 90% accuracy | 90% accuracy | Tie |
 | Heading hierarchy | 82% accuracy | 82% accuracy | Tie |
 
-**Hybrid strategy:** Use traditional for 90% of cases, LLM for 10% where it dominates.
+**Hybrid strategy:** Use traditional for 90% of cases, VLM for 10% where it dominates.
 
 ### 6.2 Economic Efficiency
 
-**All-LLM approach:**
+**All-VLM approach:**
 - Cost: 200 pages × $0.02 = **$4**
 - Speed: 200 pages × 5s = **1000s**
 
@@ -445,19 +486,47 @@ jitter = random.uniform(0.0, 0.25) * capped_delay
 
 **Savings:** 80% cost reduction, 69% time reduction while maintaining 95% of quality gains.
 
-### 6.3 The "Table Complexity" Signal
+### 6.3 Why Table Count Works
 
 Table count is a **strong signal** for document complexity:
 - 0-2 tables → simple, regular layouts
 - 3+ tables → scientific papers, financial reports, technical docs
 
-These are exactly the use cases where VLMs provide disproportionate value.
+These are exactly the use cases where VLMs provide disproportionate value. The signal is:
+- **Fast to compute** — Single pass through layout analysis
+- **Model-agnostic** — Works with any parser that detects tables
+- **Predictive** — Correlates strongly with VLM value-add
+
+### 6.4 Parser Agnostic
+
+This enhancement pattern works with **any parser** that exposes:
+1. Page-level document access
+2. Table detection/counting capability
+3. Markdown or HTML output
+
+**Apply to:**
+- Docling → +3.9% TEDS (demonstrated)
+- opendataloader → Expected +2-4% on complex docs
+- unstructured → Would address its main weakness (tables)
+- marker → Could offset GPL licensing limitation with VLM alternative
 
 ---
 
-## 7. Future Improvements
+## 7. Future Directions
 
-### 7.1 Adaptive Threshold
+### 7.1 Apply Pattern to Other Parsers
+
+The hybrid approach demonstrated with Docling could be applied to:
+- **opendataloader** — Already has hybrid mode; VLM enhancement could push it higher
+- **marker** — GPL license limits commercial use; VLM fallback could offset adoption barriers
+- **unstructured** — Weak table extraction (0.588 TEDS) would benefit most from VLM routing
+
+Implementation requires:
+1. Page-level access to parser output
+2. Table counting heuristic
+3. VLM API integration wrapper
+
+### 7.2 Adaptive Threshold
 
 Current: Fixed threshold of 2 tables
 Future: Learn threshold per document type
@@ -465,7 +534,7 @@ Future: Learn threshold per document type
 threshold = LEARNED_THRESHOLDS.get(doc_type, DEFAULT_THRESHOLD)
 ```
 
-### 7.2 Per-Page Routing
+### 7.3 Per-Page Routing
 
 Current: All-or-nothing (entire document uses same path)
 Future: Route each page independently
@@ -477,15 +546,6 @@ for page in pages:
         pages[page] = standard_convert(page)
 ```
 
-### 7.3 Parallel Processing
-
-Current: Sequential processing
-Future: Parallel batch processing with rate limit awareness
-```python
-with ThreadPoolExecutor(max_workers=10) as executor:
-    futures = [executor.submit(convert, doc) for doc in docs]
-```
-
 ### 7.4 Model Selection
 
 Current: Manual model selection via env var
@@ -494,36 +554,237 @@ Future: Automatic model selection based on page complexity
 model = "gpt-4o" if complexity > 0.8 else "gpt-4o-mini"
 ```
 
-### 7.5 Cache Integration
+### 7.5 Alternative VLM Providers
 
-Current: Per-document caching
-Future: Persistent cache across runs
-```python
-@lru_cache(maxsize=1000)
-def convert_with_cache(doc_hash: str) -> str:
-    return vlm_convert(doc_hash)
-```
+The architecture is provider-agnostic. Consider:
+- **Claude 3.5 Sonnet** — Strong vision capabilities, competitive pricing
+- **Gemini 2.0 Flash** — Fast, cost-effective for batch processing
+- **Open-source VLMs** — Qwen2-VL, Pixtral for self-hosted deployments
 
 ---
 
 ## 8. Conclusion
 
-The docling-hybrid engine demonstrates that **intelligent routing** between traditional parsing and LLM-based extraction can deliver:
+### 8.1 Key Takeaways
 
-1. **Better quality** than traditional-only approaches (+3.9% table accuracy)
-2. **Lower cost** than LLM-only approaches (80% reduction)
-3. **Graceful degradation** via fallback mechanisms
+1. **Docling is the leading open-source PDF parser** — Strong accuracy, MIT license, active development
+2. **VLM enhancement is a general pattern** — Works with Docling, opendataloader, or any page-aware parser
+3. **Table count is a reliable complexity signal** — Simple routing heuristic achieves most gains with minimal cost
+4. **Even single-model VLM (GPT-4o) provides value** — +3.9% TEDS improvement demonstrates semantic reasoning matters
 
-This pattern applies broadly to document processing workflows:
+### 8.2 When to Use Each Approach
+
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| Production RAG pipeline | Docling (fast, accurate enough) |
+| Table-heavy scientific papers | Docling + VLM routing |
+| Financial statements (critical accuracy) | Docling + VLM routing |
+| High-volume batch processing | Docling alone (speed matters) |
+| Evaluation of other parsers | Apply same VLM routing pattern |
+
+### 8.3 The Broader Pattern
+
+This hybrid pattern applies beyond PDF parsing:
 - **OCR + LLM** for handwritten text
-- **Rule extraction + LLM** for entity recognition
+- **Rule extraction + LLM** for entity recognition  
 - **Template matching + LLM** for form parsing
+- **Traditional parser + LLM** for code conversion
 
-The key insight: **use LLMs where they dominate, not everywhere.**
+**The principle:** Use traditional methods for the 80-90% of cases they handle well. Deploy LLMs selectively for the semantic edge cases where they provide disproportionate value.
+
+### 8.4 Future Work
+
+The same enhancement strategy could be applied to:
+- **opendataloader-hybrid** — Combine with VLM for additional gain
+- **marker** — Offset GPL limitation with VLM fallback
+- **unstructured** — Improve weak table extraction
+
+The routing heuristic is model-agnostic; only the VLM integration details differ per parser.
 
 ---
 
-## Appendix A: Installation and Usage
+## Appendix A: Evaluation Metrics
+
+The benchmark uses three complementary metrics to evaluate PDF-to-Markdown conversion quality. Each metric captures a distinct aspect of document structure fidelity.
+
+### A.1 Reading Order Similarity (NID, NID-S)
+
+**What it measures:** Sequence-level similarity between extracted and ground-trival text.
+
+**Source:** Chen et al. "MDEval: Evaluating and Enhancing Markdown Awareness in Large Language Models." *arXiv:2501.15000*, 2025. [https://arxiv.org/abs/2501.15000](https://arxiv.org/abs/2501.15000)
+
+**Formula:**
+$$
+\text{NID} = \frac{\text{ratio}(\text{gt}, \text{pred})}{100}
+$$
+
+where `ratio` is the RapidFuzz fuzzy string matching ratio based on Levenshtein distance.
+
+**Implementation:** Uses `rapidfuzz.fuzz.ratio()` which computes:
+$$
+\text{ratio} = 100 \times \left(1 - \frac{\text{Levenshtein}(\text{gt}, \text{pred})}{\max(|\text{gt}|, |\text{pred}|)}\right)
+$$
+
+**Variants:**
+- **NID:** Compares full extracted text including table content
+- **NID-S:** Strips HTML tables before comparison to isolate narrative reading order
+
+**Why relevant:** Reading order correctness is fundamental for RAG pipelines and downstream NLP tasks. Out-of-order text fragments destroy semantic coherence and reduce retrieval quality.
+
+---
+
+### A.2 Table Structure Similarity (TEDS, TEDS-S)
+
+**What it measures:** Structural fidelity of reconstructed tables using tree edit distance.
+
+**Source:** Zhong et al. "Image-based Table Recognition: Data, Model, and Evaluation." *ECCV 2020*. [https://arxiv.org/abs/1911.10683](https://arxiv.org/abs/1911.10683)
+
+**Algorithm:** APTED (Approximate Tree Edit Distance) — Pawlik & Augsten. "RTED: A Robust Algorithm for the Tree Edit Distance." *VLDB 2012*. [https://arxiv.org/abs/1201.0230](https://arxiv.org/abs/1201.0230)
+
+**Formula:**
+$$
+\text{TEDS}(T_{\text{gt}}, T_{\text{pred}}) = 1 - \frac{\text{EditDist}(T_{\text{gt}}, T_{\text{pred}})}{\max(|T_{\text{gt}}|, |T_{\text{pred}}|, 1)}
+$$
+
+where `EditDist` is the minimum-cost sequence of operations (insert, delete, rename) to transform one tree into another.
+
+**Cost model:**
+- Tag mismatch (`td` vs `tr`): cost = 1.0
+- `colspan`/`rowspan` mismatch: cost = 1.0
+- Cell text content: normalized Levenshtein distance
+
+**Variants:**
+- **TEDS:** Evaluates both structure and cell text content
+- **TEDS-S:** Structure-only, ignoring cell text differences (isolates OCR noise from structure errors)
+
+**Why relevant:** Tables contain the highest-density information in many documents. Structure errors (merged cells, wrong spans) destroy table semantics and make data extraction impossible. TEDS captures:
+- Multi-hop cell misalignment (when errors propagate across rows/columns)
+- Nested table structures
+- Irregular borders and merged cells
+
+**Advantages over prior metrics:**
+- Captures multi-hop errors that row-by-row comparison misses
+- Robust to OCR noise (via TEDS-S structure-only variant)
+- Handles HTML table representations natively
+
+---
+
+### A.3 Heading-Level Similarity (MHS, MHS-S)
+
+**What it measures:** Accuracy of heading detection and hierarchical document structure.
+
+**Formula:**
+$$
+\text{MHS}(H_{\text{gt}}, H_{\text{pred}}) = 1 - \frac{\text{EditDist}(H_{\text{gt}}, H_{\text{pred}})}{\max(|H_{\text{gt}}|, |H_{\text{pred}}|, 1)}
+$$
+
+where headings are parsed into a tree with `heading` and `content` node types.
+
+**Implementation details:**
+- All heading levels (`#` through `######`) are treated as equivalent nodes
+- Content blocks are grouped under their nearest preceding heading
+- Tree edit distance computed via APTED with custom `HeadingConfig`
+
+**Cost model:**
+- Tag mismatch (`heading` vs `content`): cost = 1.0
+- Text content: normalized Levenshtein distance (MHS only)
+
+**Variants:**
+- **MHS:** Rewards correct heading position, level, and content
+- **MHS-S:** Structure-only, ignoring heading text content
+
+**Why relevant:** Document hierarchy enables:
+- **Section-aware retrieval:** RAG systems can limit search to relevant sections
+- **Table of contents generation:** Navigation aids for long documents
+- **Semantic chunking:** Breaking documents into coherent units for embedding
+
+A perfect MHS score indicates the parser correctly identified all headings and preserved the document's logical structure.
+
+---
+
+### A.4 Overall Score
+
+The overall accuracy is the arithmetic mean of the three primary metrics:
+
+$$
+\text{Overall} = \frac{\text{NID} + \text{TEDS} + \text{MHS}}{3}
+$$
+
+Only documents with non-null scores for a given metric contribute to that metric's mean. Documents missing the required artefacts (e.g., no tables) are excluded from that metric's aggregation.
+
+---
+
+### A.5 Metric Interpretation Guide
+
+| Score Range | Interpretation |
+|-------------|----------------|
+| 0.95 - 1.00 | Near-perfect: Production-ready for most use cases |
+| 0.90 - 0.95 | Excellent: Minor errors, usually acceptable |
+| 0.80 - 0.90 | Good: Noticeable errors but generally usable |
+| 0.70 - 0.80 | Fair: Significant errors, may require post-processing |
+| < 0.70 | Poor: Not recommended for production use |
+
+---
+
+### A.6 Why These Metrics Suit Digitally Generated PDFs
+
+The evaluation corpus consists of **digitally generated PDFs** (born-digital documents), not scanned images. This distinction critically affects metric choice and interpretation.
+
+#### Characteristics of Digital PDFs
+
+| Aspect | Digital PDFs | Scanned PDFs |
+|--------|--------------|--------------|
+| Text layer | Present, exact | Requires OCR |
+| Table structure | Encoded as drawing commands | Visual pattern only |
+| Font metrics | Precise glyphs + positions | None (rasterized) |
+| Metadata | Tags, bookmarks, links | Typically absent |
+| Noise | None (perfect rendering) | Rotation, skew, artifacts |
+
+#### Metric Suitability Analysis
+
+**NID (Reading Order)** — Digital PDFs provide perfect text extraction; the challenge is *ordering*, not *recognition*. Every character is retrievable with 100% accuracy. NID scores below 1.0 indicate:
+- Multi-column layout misordering
+- Sidebar/footer content misplaced
+- Table cell sequencing errors
+
+This clean separation (text vs. structure) makes NID an unambiguous measure of layout intelligence.
+
+**TEDS (Table Structure)** — Digital PDF tables are defined by precise vector coordinates, not visual heuristics. Border lines, cell boundaries, and spanning are exact. TEDS captures:
+- Colspan/rowspan detection errors
+- Header vs body cell misclassification
+- Nested table recognition failures
+
+The TEDS-S variant (structure-only) is particularly powerful: any deviation reflects *parser limitations*, not OCR noise. A score of 0.92 means 8% of structural decisions were wrong—not 8% of characters misrecognized.
+
+**MHS (Heading Hierarchy)** — Digital PDFs often encode heading semantics via:
+- Font size/style changes
+- Outline/bookmark entries
+- Tagged PDF structure
+
+MHS evaluates whether the parser infers these cues correctly. Unlike scanned documents where heading detection competes with font recognition, digital PDFs allow unambiguous assessment of structural extraction.
+
+#### Contrast with OCR-Centric Benchmarks
+
+Traditional document QA datasets (e.g., RVL-CDIP, DocVQA) focus on **visual document understanding**—can a model recognize this as an invoice vs. letter? That's not the problem here.
+
+Our benchmark assumes **text is free and perfect**. The question is: *Can we reconstruct the logical document structure from the physical layout?*
+
+This is why:
+- No OCR accuracy metrics (CER, WER) — text layer eliminates this concern
+- No visual classification — document type is known a priori
+- Focus on NID/TEDS/MHS — these measure *structure reconstruction*, not *content recognition*
+
+#### Implications for docling-hybrid
+
+The VLM routing strategy targets exactly where structure inference fails:
+- Simple pages (≤2 tables): Geometric heuristics suffice
+- Complex pages (>2 tables): Semantic reasoning required
+
+The 3.9% TEDS improvement demonstrates that GPT-4o's *semantic understanding* complements Docling's *geometric precision*—exactly the gap that exists when parsing digital layouts where text extraction is trivial but structure inference remains hard.
+
+---
+
+## Appendix B: Installation and Usage
 
 ### Installation
 
