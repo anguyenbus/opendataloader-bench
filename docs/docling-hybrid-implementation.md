@@ -784,7 +784,58 @@ The 3.9% TEDS improvement demonstrates that GPT-4o's *semantic understanding* co
 
 ---
 
-## Appendix B: Installation and Usage
+## Appendix B: Benchmark Dataset
+
+All benchmark results reported in this document use the **DP-Bench** dataset from Upstage.
+
+### B.1 Dataset Overview
+
+**Source:** [upstage/dp-bench](https://huggingface.co/datasets/upstage/dp-bench) on HuggingFace
+
+**Size:** 200 documents across three sources:
+
+| Source | Documents | Type |
+|--------|-----------|------|
+| Library of Congress | 90 | Government, legal, historical |
+| Open Educational Resources | 90 | Academic, textbooks |
+| Upstage internal | 20 | Commercial documents |
+
+**Element types (12 categories):**
+- Table, Paragraph, Figure, Chart
+- Header, Footer, Caption, Equation
+- Heading1, List, Index
+
+### B.2 Document Characteristics
+
+| Aspect | Description |
+|--------|-------------|
+| **Format** | Digitally-born PDFs (PDF-1.6) |
+| **Text layer** | Present, no OCR required |
+| **Complexity** | Ranges from simple paragraphs to complex tables |
+| **Ground truth** | Structured JSON with coordinates, categories, and text |
+| **License** | Various (public domain, OER, proprietary) |
+
+### B.3 Why DP-Bench Matters
+
+DP-Bench was designed specifically for document parsing benchmarking with the same metrics used here (NID, TEDS, MHS). Unlike synthetic datasets, it represents:
+
+- **Real-world diversity** — Academic papers, government documents, educational materials
+- **Natural complexity** — Tables span from simple 2×2 grids to nested scientific data
+- **Production relevance** — The document types match actual RAG/processing workloads
+
+### B.4 Relevance to VLM Enhancement
+
+The table-heavy documents in DP-Bench are exactly where the hybrid approach provides value:
+
+- **Simple pages (≤2 tables)** — ~60% of corpus, traditional parsers excel
+- **Complex pages (>2 tables)** — ~20% of corpus, VLM provides disproportionate gains
+- **No tables** — ~20% of corpus, NID/MHS are the primary metrics
+
+The +3.9% TEDS improvement from docling-hybrid comes primarily from the ~40 documents that contain 3+ tables — demonstrating that semantic reasoning matters precisely where geometric heuristics reach their limits.
+
+---
+
+## Appendix C: Installation and Usage
 
 ### Installation
 
@@ -825,9 +876,21 @@ uv run src/generate_benchmark_chart.py
 
 ---
 
-## Appendix B: References
+## Appendix D: References
 
-- **Docling Documentation:** https://ds4sd.github.io/docling/
-- **OpenAI API:** https://platform.openai.com/docs/guides/vision
-- **TEDS Metric:** Zhong et al. "Image-based Table Recognition." ECCV 2020.
-- **NID Metric:** Chen et al. "MDEval: Evaluating Markdown Awareness in LLMs." arXiv 2025.
+### Papers and Metrics
+
+- **MDEval:** Chen et al. "MDEval: Evaluating and Enhancing Markdown Awareness in Large Language Models." *arXiv:2501.15000*, 2025. [https://arxiv.org/abs/2501.15000](https://arxiv.org/abs/2501.15000)
+
+- **TEDS:** Zhong et al. "Image-based Table Recognition: Data, Model, and Evaluation." *ECCV 2020*. [https://arxiv.org/abs/1911.10683](https://arxiv.org/abs/1911.10683)
+
+- **RTED/APTED:** Pawlik & Augsten. "RTED: A Robust Algorithm for the Tree Edit Distance." *VLDB 2012*. [https://arxiv.org/abs/1201.0230](https://arxiv.org/abs/1201.0230)
+
+### Datasets
+
+- **DP-Bench:** Upstage. "Document Parsing Benchmark." Hugging Face. [https://huggingface.co/datasets/upstage/dp-bench](https://huggingface.co/datasets/upstage/dp-bench)
+
+### Tools and Libraries
+
+- **Docling:** https://ds4sd.github.io/docling/
+- **OpenAI Vision API:** https://platform.openai.com/docs/guides/vision
