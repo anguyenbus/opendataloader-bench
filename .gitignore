@@ -205,3 +205,14 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project specific
+agent-os/
+.claude/
+.python-version
+history/
+test_output/
+
+# LFS assets - exclude from fork
+pdfs_thumbnail/
+charts/*.png

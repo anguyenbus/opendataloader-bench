@@ -21,6 +21,7 @@ The evaluation pipeline is modular—add new engines, corpora, or metrics with m
 |-----------------------------|-----------|---------------|-----------|-----------|----------------|-------------|
 | **opendataloader [hybrid]** | **0.907** | **0.934**     | **0.928** | 0.821     | 0.463          | Apache-2.0  |
 | nutrient                    | 0.885     | 0.925         | 0.708     | 0.819     | **0.008**      | Commercial  |
+| docling-hybrid              | 0.889     | 0.904         | 0.922     | 0.823     | 4.899          | MIT         |
 | docling                     | 0.882     | 0.898         | 0.887     | **0.824** | 0.762          | MIT         |
 | marker                      | 0.861     | 0.890         | 0.808     | 0.796     | 53.932         | GPL-3.0     |
 | unstructured [hi_res]       | 0.841     | 0.904         | 0.588     | 0.749     | 3.008          | Apache-2.0  |
@@ -45,6 +46,7 @@ Detailed JSON outputs live alongside each engine and capture the exact metric va
 - [prediction/opendataloader/evaluation.json](prediction/opendataloader/evaluation.json)
 - [prediction/opendataloader-hybrid/evaluation.json](prediction/opendataloader-hybrid/evaluation.json)
 - [prediction/docling/evaluation.json](prediction/docling/evaluation.json)
+- [prediction/docling-hybrid/evaluation.json](prediction/docling-hybrid/evaluation.json)
 - [prediction/marker/evaluation.json](prediction/marker/evaluation.json)
 - [prediction/edgeparse/evaluation.json](prediction/edgeparse/evaluation.json)
 - [prediction/nutrient/evaluation.json](prediction/nutrient/evaluation.json)
@@ -130,6 +132,7 @@ Want to run this benchmark yourself or add a new engine? Follow the steps below.
    # Individual engines
    uv sync --extra opendataloader
    uv sync --extra docling
+   uv sync --extra docling-hybrid
    uv sync --extra markitdown
 
    # All permissively-licensed engines at once
@@ -154,6 +157,30 @@ uv run src/run.py --engine docling
 # Force re-run even if results exist
 uv run src/run.py --engine docling --force
 ```
+
+#### docling-hybrid Engine
+
+The `docling-hybrid` engine intelligently routes pages based on table count:
+- Pages with ≤2 tables: Uses standard Docling parsing (fast)
+- Pages with >2 tables: Uses VLM pipeline with GPT-4o for better table accuracy
+
+```sh
+# Requires OPENAI_API_KEY environment variable
+export OPENAI_API_KEY="sk-..."
+
+# Run docling-hybrid
+uv run src/run.py --engine docling-hybrid
+
+# Use different model (default: gpt-4o-mini)
+export DOCLING_HYBRID_MODEL="gpt-4o"
+uv run src/run.py --engine docling-hybrid
+
+# Adjust timeout (default: 60 seconds)
+export DOCLING_HYBRID_TIMEOUT="120"
+uv run src/run.py --engine docling-hybrid
+```
+
+On API failures, the engine falls back to standard Docling output automatically.
 
 #### Individual Stages
 

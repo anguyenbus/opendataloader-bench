@@ -68,7 +68,7 @@ def _load_evaluation_metrics(prediction_root: Path) -> List[EngineMetrics]:
             continue
 
         scores = payload.get("metrics", {}).get("score", {})
-        summary = payload.get("summary", {})
+        summary = payload.get("summary") or {}
         engine_name = summary.get("engine_name", "unknown")
         elapsed_per_page = summary.get("elapsed_per_doc")
         engines.append(
